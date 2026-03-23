@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────────────
+// AUTH.JS REQUIRED TABLES
+// ──────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ──────────────────────────────────────────────
+// USER
+// ──────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  discordId       String  @unique
+  discordUsername  String
+  discordAvatar   String?
+
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  selections       Selection[]
+  freePasses       FreePass[]
+  competitionUsers CompetitionUser[]
+
+  @@map("users")
+}
+
+// ──────────────────────────────────────────────
+// COMPETITION
+// ──────────────────────────────────────────────
+
+model Competition {
+  id          String            @id @default(cuid())
+  name        String
+  seasonLabel String
+  joinCode    String?           @unique
+  status      CompetitionStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  gameweeks        Gameweek[]
+  competitionUsers CompetitionUser[]
+
+  @@map("competitions")
+}
+
+enum CompetitionStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+// ──────────────────────────────────────────────
+// COMPETITION USER (join table)
+// ──────────────────────────────────────────────
+
+model CompetitionUser {
+  id                     String    @id @default(cuid())
+  userId                 String
+  competitionId          String
+  isEliminated           Boolean   @default(false)
+  eliminatedAt           DateTime?
+  eliminatedInGameweekId String?
+  joinedAt               DateTime  @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, competitionId])
+  @@map("competition_users")
+}
+
+// ──────────────────────────────────────────────
+// GAMEWEEK
+// ──────────────────────────────────────────────
+
+model Gameweek {
+  id            String         @id @default(cuid())
+  competitionId String
+  weekNumber    Int
+  deadline      DateTime
+  status        GameweekStatus @default(UPCOMING)
+  apiMatchday   Int?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  selections  Selection[]
+  freePasses  FreePass[]
+  fixtures    Fixture[]
+
+  @@unique([competitionId, weekNumber])
+  @@map("gameweeks")
+}
+
+enum GameweekStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+// ──────────────────────────────────────────────
+// FIXTURE (cached from football-data.org)
+// ──────────────────────────────────────────────
+
+model Fixture {
+  id         String   @id @default(cuid())
+  gameweekId String
+  apiMatchId Int      @unique
+  homeTeamId Int
+  homeTeam   String
+  awayTeamId Int
+  awayTeam   String
+  kickoff    DateTime
+  status     String   @default("SCHEDULED")
+  homeScore  Int?
+  awayScore  Int?
+  updatedAt  DateTime @updatedAt
+
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@index([gameweekId])
+  @@map("fixtures")
+}
+
+// ──────────────────────────────────────────────
+// TEAM (reference data)
+// ──────────────────────────────────────────────
+
+model Team {
+  id        String @id @default(cuid())
+  apiTeamId Int    @unique
+  name      String
+  shortName String
+  tla       String
+  crestUrl  String?
+
+  @@map("teams")
+}
+
+// ──────────────────────────────────────────────
+// SELECTION
+// ──────────────────────────────────────────────
+
+model Selection {
+  id         String          @id @default(cuid())
+  userId     String
+  gameweekId String
+  teamApiId  Int
+  teamName   String
+  result     SelectionResult @default(PENDING)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameweekId])
+  @@index([gameweekId])
+  @@map("selections")
+}
+
+enum SelectionResult {
+  PENDING
+  WIN
+  DRAW
+  LOSS
+}
+
+// ──────────────────────────────────────────────
+// FREE PASS
+// ──────────────────────────────────────────────
+
+model FreePass {
+  id         String   @id @default(cuid())
+  userId     String
+  gameweekId String
+  reason     String?
+  grantedBy  String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameweekId])
+  @@map("free_passes")
+}
