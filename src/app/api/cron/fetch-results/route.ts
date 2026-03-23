@@ -10,6 +10,48 @@ export async function GET(req: Request) {
   }
 
   try {
+    // Fetch fixtures for UPCOMING gameweeks (so pick page shows opponents)
+    const upcomingGameweeks = await prisma.gameweek.findMany({
+      where: {
+        status: "UPCOMING",
+        apiMatchday: { not: null },
+        competition: { status: "ACTIVE" },
+      },
+    });
+
+    let fixturesFetched = 0;
+    for (const gameweek of upcomingGameweeks) {
+      const data = await getMatchday(gameweek.apiMatchday!);
+      for (const match of data.matches) {
+        await prisma.fixture.upsert({
+          where: { apiMatchId: match.id },
+          update: {
+            homeTeam: match.homeTeam.name,
+            awayTeam: match.awayTeam.name,
+            homeTeamId: match.homeTeam.id,
+            awayTeamId: match.awayTeam.id,
+            kickoff: new Date(match.utcDate),
+            status: match.status,
+            homeScore: match.score.fullTime.home,
+            awayScore: match.score.fullTime.away,
+          },
+          create: {
+            gameweekId: gameweek.id,
+            apiMatchId: match.id,
+            homeTeamId: match.homeTeam.id,
+            homeTeam: match.homeTeam.name,
+            awayTeamId: match.awayTeam.id,
+            awayTeam: match.awayTeam.name,
+            kickoff: new Date(match.utcDate),
+            status: match.status,
+            homeScore: match.score.fullTime.home,
+            awayScore: match.score.fullTime.away,
+          },
+        });
+        fixturesFetched++;
+      }
+    }
+
     // Find active gameweeks with an apiMatchday
     const activeGameweeks = await prisma.gameweek.findMany({
       where: {
@@ -112,7 +154,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({
-      message: `Updated ${totalUpdated} selections across ${activeGameweeks.length} gameweeks`,
+      message: `Fetched ${fixturesFetched} fixtures for ${upcomingGameweeks.length} upcoming gameweeks. Updated ${totalUpdated} selections across ${activeGameweeks.length} active gameweeks.`,
     });
   } catch (error) {
     console.error("fetch-results error:", error);

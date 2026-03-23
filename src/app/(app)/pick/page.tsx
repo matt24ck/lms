@@ -80,6 +80,17 @@ export default async function PickPage() {
     orderBy: { shortName: "asc" },
   });
 
+  // Fetch fixtures for this gameweek to show opponents
+  const fixtures = await prisma.fixture.findMany({
+    where: { gameweekId: currentGameweek.id },
+  });
+
+  const fixtureMap: Record<number, { opponent: string; isHome: boolean }> = {};
+  for (const f of fixtures) {
+    fixtureMap[f.homeTeamId] = { opponent: f.awayTeam, isHome: true };
+    fixtureMap[f.awayTeamId] = { opponent: f.homeTeam, isHome: false };
+  }
+
   // Get all teams the user has already used in this competition
   const usedSelections = await prisma.selection.findMany({
     where: {
@@ -175,6 +186,7 @@ export default async function PickPage() {
         gameweekNumber={currentGameweek.weekNumber}
         isLocked={isLocked}
         isEliminated={competitionUser.isEliminated}
+        fixtures={fixtureMap}
       />
     </div>
   );

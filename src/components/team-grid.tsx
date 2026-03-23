@@ -27,6 +27,11 @@ interface UsedTeam {
   weekNumber: number;
 }
 
+interface FixtureInfo {
+  opponent: string;
+  isHome: boolean;
+}
+
 interface TeamGridProps {
   teams: Team[];
   usedTeams: UsedTeam[];
@@ -35,6 +40,7 @@ interface TeamGridProps {
   gameweekNumber: number;
   isLocked: boolean;
   isEliminated: boolean;
+  fixtures?: Record<number, FixtureInfo>;
 }
 
 export function TeamGrid({
@@ -45,6 +51,7 @@ export function TeamGrid({
   gameweekNumber,
   isLocked,
   isEliminated,
+  fixtures = {},
 }: TeamGridProps) {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -106,6 +113,7 @@ export function TeamGrid({
             team.apiTeamId !== currentPick;
           const isSelected = team.apiTeamId === currentPick;
           const gwUsed = usedTeamMap.get(team.apiTeamId);
+          const fixture = fixtures[team.apiTeamId];
 
           return (
             <button
@@ -162,6 +170,12 @@ export function TeamGrid({
               >
                 {team.shortName}
               </span>
+
+              {fixture && (
+                <span className="text-xs text-muted-foreground">
+                  vs {fixture.opponent} ({fixture.isHome ? "H" : "A"})
+                </span>
+              )}
 
               {isUsed && gwUsed && (
                 <span className="text-xs text-muted-foreground">
