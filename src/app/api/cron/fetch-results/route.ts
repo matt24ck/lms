@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { getMatchday } from "@/lib/football-api";
+import { getResend } from "@/lib/resend";
 import { SelectionResult } from "@/generated/prisma/client";
+import { format } from "date-fns";
 
 export async function GET(req: Request) {
   if (!verifyCronSecret(req)) {
@@ -96,23 +98,7 @@ export async function GET(req: Request) {
           continue;
         }
 
-        // Update selections for this match
-        const homeSelections = await prisma.selection.findMany({
-          where: {
-            gameweekId: gameweek.id,
-            teamApiId: match.homeTeam.id,
-            result: "PENDING",
-          },
-        });
-
-        const awaySelections = await prisma.selection.findMany({
-          where: {
-            gameweekId: gameweek.id,
-            teamApiId: match.awayTeam.id,
-            result: "PENDING",
-          },
-        });
-
+        // Determine results
         let homeResult: SelectionResult;
         let awayResult: SelectionResult;
 
@@ -127,21 +113,26 @@ export async function GET(req: Request) {
           awayResult = "DRAW";
         }
 
-        for (const sel of homeSelections) {
-          await prisma.selection.update({
-            where: { id: sel.id },
-            data: { result: homeResult },
-          });
-          totalUpdated++;
-        }
+        // Batch update all selections for this match
+        const homeUpdated = await prisma.selection.updateMany({
+          where: {
+            gameweekId: gameweek.id,
+            teamApiId: match.homeTeam.id,
+            result: "PENDING",
+          },
+          data: { result: homeResult },
+        });
 
-        for (const sel of awaySelections) {
-          await prisma.selection.update({
-            where: { id: sel.id },
-            data: { result: awayResult },
-          });
-          totalUpdated++;
-        }
+        const awayUpdated = await prisma.selection.updateMany({
+          where: {
+            gameweekId: gameweek.id,
+            teamApiId: match.awayTeam.id,
+            result: "PENDING",
+          },
+          data: { result: awayResult },
+        });
+
+        totalUpdated += homeUpdated.count + awayUpdated.count;
       }
 
       // If all matches are finished, mark gameweek as completed
@@ -153,8 +144,47 @@ export async function GET(req: Request) {
       }
     }
 
+    // Send reminders for upcoming gameweeks where players haven't picked
+    let reminded = 0;
+    for (const gameweek of upcomingGameweeks) {
+      const activePlayers = await prisma.competitionUser.findMany({
+        where: {
+          competitionId: gameweek.competitionId,
+          isEliminated: false,
+        },
+        select: { userId: true, user: { select: { email: true, name: true } } },
+      });
+
+      const existingSelections = await prisma.selection.findMany({
+        where: { gameweekId: gameweek.id },
+        select: { userId: true },
+      });
+      const pickedUserIds = new Set(existingSelections.map((s) => s.userId));
+
+      for (const player of activePlayers) {
+        if (!pickedUserIds.has(player.userId) && player.user.email) {
+          getResend()
+            .emails.send({
+              from: process.env.RESEND_FROM_EMAIL!,
+              to: player.user.email,
+              subject: `LMS Reminder - Pick your team for Gameweek ${gameweek.weekNumber}`,
+              html: `
+                <h1>Last Man Standing</h1>
+                <p>Hi ${player.user.name ?? "there"},</p>
+                <p>You haven't made your pick for <strong>Gameweek ${gameweek.weekNumber}</strong> yet!</p>
+                <p><strong>Deadline:</strong> ${format(gameweek.deadline, "EEEE d MMMM, HH:mm")} UTC</p>
+                <p>Don't forget - if you don't pick, you'll be eliminated!</p>
+                <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/pick">Make your pick now</a></p>
+              `,
+            })
+            .catch((err) => console.error("Failed to send reminder:", err));
+          reminded++;
+        }
+      }
+    }
+
     return NextResponse.json({
-      message: `Fetched ${fixturesFetched} fixtures for ${upcomingGameweeks.length} upcoming gameweeks. Updated ${totalUpdated} selections across ${activeGameweeks.length} active gameweeks.`,
+      message: `Fetched ${fixturesFetched} fixtures for ${upcomingGameweeks.length} upcoming gameweeks. Updated ${totalUpdated} selections across ${activeGameweeks.length} active gameweeks. Sent ${reminded} reminders.`,
     });
   } catch (error) {
     console.error("fetch-results error:", error);

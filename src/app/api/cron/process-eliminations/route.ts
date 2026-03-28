@@ -30,7 +30,7 @@ export async function GET(req: Request) {
         continue;
       }
 
-      // Get all active (non-eliminated) players in this competition
+      // Batch-fetch all data for this gameweek in 3 queries instead of 2 per player
       const activePlayers = await prisma.competitionUser.findMany({
         where: {
           competitionId: gameweek.competitionId,
@@ -41,116 +41,115 @@ export async function GET(req: Request) {
         },
       });
 
+      const allSelections = await prisma.selection.findMany({
+        where: { gameweekId: gameweek.id },
+      });
+      const selectionsByUser = new Map(
+        allSelections.map((s) => [s.userId, s])
+      );
+
+      const allFreePasses = await prisma.freePass.findMany({
+        where: { gameweekId: gameweek.id },
+      });
+      const freePassByUser = new Set(allFreePasses.map((fp) => fp.userId));
+
+      // Determine who to eliminate
+      const toEliminate: {
+        player: (typeof activePlayers)[0];
+        reason: string;
+      }[] = [];
+
       for (const player of activePlayers) {
-        // Check if they made a selection for this gameweek
-        const selection = await prisma.selection.findUnique({
-          where: {
-            userId_gameweekId: {
-              userId: player.userId,
-              gameweekId: gameweek.id,
-            },
-          },
-        });
-
-        // Check for free pass
-        const freePass = await prisma.freePass.findUnique({
-          where: {
-            userId_gameweekId: {
-              userId: player.userId,
-              gameweekId: gameweek.id,
-            },
-          },
-        });
-
-        let shouldEliminate = false;
-        let reason = "";
+        const selection = selectionsByUser.get(player.userId);
 
         if (!selection) {
-          // No pick = eliminated
-          shouldEliminate = true;
-          reason = "No pick submitted";
-        } else if (selection.result === "LOSS" || selection.result === "DRAW") {
-          if (freePass) {
-            // Free pass saves them
+          toEliminate.push({ player, reason: "No pick submitted" });
+        } else if (
+          selection.result === "LOSS" ||
+          selection.result === "DRAW"
+        ) {
+          if (freePassByUser.has(player.userId)) {
             survived++;
             continue;
           }
-          shouldEliminate = true;
-          reason =
+          const reason =
             selection.result === "LOSS"
               ? `${selection.teamName} lost`
               : `${selection.teamName} drew`;
+          toEliminate.push({ player, reason });
         } else if (selection.result === "WIN") {
           survived++;
-          continue;
-        } else {
-          // Result still PENDING - skip
-          continue;
         }
+        // PENDING results are skipped (no action)
+      }
 
-        if (shouldEliminate) {
-          // Check if already eliminated (idempotency)
-          if (!player.isEliminated) {
-            await prisma.competitionUser.update({
-              where: { id: player.id },
-              data: {
-                isEliminated: true,
-                eliminatedAt: new Date(),
-                eliminatedInGameweekId: gameweek.id,
-              },
-            });
-            eliminated++;
+      // Batch eliminate all at once
+      if (toEliminate.length > 0) {
+        const eliminateIds = toEliminate.map((e) => e.player.id);
+        await prisma.competitionUser.updateMany({
+          where: { id: { in: eliminateIds } },
+          data: {
+            isEliminated: true,
+            eliminatedAt: new Date(),
+            eliminatedInGameweekId: gameweek.id,
+          },
+        });
+        eliminated += toEliminate.length;
 
-            // Send elimination email
-            if (player.user.email) {
-              try {
-                await getResend().emails.send({
-                  from: process.env.RESEND_FROM_EMAIL!,
-                  to: player.user.email,
-                  subject: `LMS Gameweek ${gameweek.weekNumber} - You've been eliminated`,
-                  html: `
-                    <h1>Last Man Standing</h1>
-                    <p>Hi ${player.user.name ?? "there"},</p>
-                    <p>Unfortunately, you've been eliminated in Gameweek ${gameweek.weekNumber}.</p>
-                    <p><strong>Reason:</strong> ${reason}</p>
-                    <p>Better luck next time!</p>
-                  `,
-                });
-              } catch (emailError) {
-                console.error("Failed to send elimination email:", emailError);
-              }
-            }
+        // Send elimination emails (non-blocking, don't await each one)
+        for (const { player, reason } of toEliminate) {
+          if (player.user.email) {
+            getResend()
+              .emails.send({
+                from: process.env.RESEND_FROM_EMAIL!,
+                to: player.user.email,
+                subject: `LMS Gameweek ${gameweek.weekNumber} - You've been eliminated`,
+                html: `
+                  <h1>Last Man Standing</h1>
+                  <p>Hi ${player.user.name ?? "there"},</p>
+                  <p>Unfortunately, you've been eliminated in Gameweek ${gameweek.weekNumber}.</p>
+                  <p><strong>Reason:</strong> ${reason}</p>
+                  <p>Better luck next time!</p>
+                `,
+              })
+              .catch((err) =>
+                console.error("Failed to send elimination email:", err)
+              );
           }
         }
       }
 
-      // Send result emails to surviving players
-      const winningSelections = await prisma.selection.findMany({
-        where: {
-          gameweekId: gameweek.id,
-          result: "WIN",
-        },
-        include: {
-          user: { select: { email: true, name: true } },
-        },
-      });
+      // Send win emails (non-blocking)
+      const winningSelections = allSelections.filter(
+        (s) => s.result === "WIN"
+      );
+      if (winningSelections.length > 0) {
+        // Need user emails for winners — fetch in one query
+        const winnerUserIds = winningSelections.map((s) => s.userId);
+        const winnerUsers = await prisma.user.findMany({
+          where: { id: { in: winnerUserIds } },
+          select: { id: true, email: true, name: true },
+        });
+        const userMap = new Map(winnerUsers.map((u) => [u.id, u]));
 
-      for (const sel of winningSelections) {
-        if (sel.user.email) {
-          try {
-            await getResend().emails.send({
-              from: process.env.RESEND_FROM_EMAIL!,
-              to: sel.user.email,
-              subject: `LMS Gameweek ${gameweek.weekNumber} - ${sel.teamName} Won!`,
-              html: `
-                <h1>Last Man Standing</h1>
-                <p>Hi ${sel.user.name ?? "there"},</p>
-                <p>Great news! <strong>${sel.teamName}</strong> won in Gameweek ${gameweek.weekNumber}.</p>
-                <p>You survive to the next round. Don't forget to make your pick!</p>
-              `,
-            });
-          } catch (emailError) {
-            console.error("Failed to send win email:", emailError);
+        for (const sel of winningSelections) {
+          const user = userMap.get(sel.userId);
+          if (user?.email) {
+            getResend()
+              .emails.send({
+                from: process.env.RESEND_FROM_EMAIL!,
+                to: user.email,
+                subject: `LMS Gameweek ${gameweek.weekNumber} - ${sel.teamName} Won!`,
+                html: `
+                  <h1>Last Man Standing</h1>
+                  <p>Hi ${user.name ?? "there"},</p>
+                  <p>Great news! <strong>${sel.teamName}</strong> won in Gameweek ${gameweek.weekNumber}.</p>
+                  <p>You survive to the next round. Don't forget to make your pick!</p>
+                `,
+              })
+              .catch((err) =>
+                console.error("Failed to send win email:", err)
+              );
           }
         }
       }

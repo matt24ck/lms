@@ -45,7 +45,6 @@ export default async function StandingsPage() {
         },
       },
     },
-    orderBy: [{ isEliminated: "asc" }, { joinedAt: "asc" }],
   });
 
   // Count survived gameweeks per user
@@ -61,6 +60,12 @@ export default async function StandingsPage() {
   const winsMap = new Map(
     selectionCounts.map((s) => [s.userId, s._count])
   );
+
+  // Sort: alive first, then by wins descending
+  competitionUsers.sort((a, b) => {
+    if (a.isEliminated !== b.isEliminated) return a.isEliminated ? 1 : -1;
+    return (winsMap.get(b.userId) ?? 0) - (winsMap.get(a.userId) ?? 0);
+  });
 
   const alive = competitionUsers.filter((cu) => !cu.isEliminated);
   const eliminated = competitionUsers.filter((cu) => cu.isEliminated);

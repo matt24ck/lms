@@ -121,6 +121,7 @@ model CompetitionUser {
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 
   @@unique([userId, competitionId])
+  @@index([competitionId, isEliminated])
   @@map("competition_users")
 }
 
@@ -145,6 +146,7 @@ model Gameweek {
   fixtures    Fixture[]
 
   @@unique([competitionId, weekNumber])
+  @@index([competitionId, status])
   @@map("gameweeks")
 }
 
@@ -212,6 +214,7 @@ model Selection {
 
   @@unique([userId, gameweekId])
   @@index([gameweekId])
+  @@index([gameweekId, teamApiId, result])
   @@map("selections")
 }
 

@@ -171,10 +171,12 @@ export function TeamGrid({
                 {team.shortName}
               </span>
 
-              {fixture && (
+              {fixture ? (
                 <span className="text-xs text-muted-foreground">
                   vs {fixture.opponent} ({fixture.isHome ? "H" : "A"})
                 </span>
+              ) : (
+                <span className="text-xs text-yellow-500">No fixture</span>
               )}
 
               {isUsed && gwUsed && (

@@ -2,10 +2,31 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Simple in-memory rate limit: 5 attempts per user per minute
+const attempts = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const entry = attempts.get(userId);
+  if (!entry || now > entry.resetAt) {
+    attempts.set(userId, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  entry.count++;
+  return entry.count > 5;
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isRateLimited(session.user.id)) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please wait a minute." },
+      { status: 429 }
+    );
   }
 
   const { code } = await req.json();

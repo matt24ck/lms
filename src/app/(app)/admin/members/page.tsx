@@ -12,8 +12,18 @@ import {
 } from "@/components/ui/table";
 import { AddMemberForm } from "@/components/admin/add-member-form";
 import { RemoveMemberButton } from "@/components/admin/remove-member-button";
+import Link from "next/link";
 
-export default async function AdminMembersPage() {
+const PAGE_SIZE = 50;
+
+export default async function AdminMembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1"));
+
   const activeCompetition = await prisma.competition.findFirst({
     where: { status: "ACTIVE" },
   });
@@ -28,22 +38,31 @@ export default async function AdminMembersPage() {
     );
   }
 
-  const members = await prisma.competitionUser.findMany({
-    where: { competitionId: activeCompetition.id },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-          discordUsername: true,
-          discordId: true,
+  const [members, totalCount] = await Promise.all([
+    prisma.competitionUser.findMany({
+      where: { competitionId: activeCompetition.id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            discordUsername: true,
+            discordId: true,
+          },
         },
       },
-    },
-    orderBy: [{ isEliminated: "asc" }, { joinedAt: "asc" }],
-  });
+      orderBy: [{ isEliminated: "asc" }, { joinedAt: "asc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.competitionUser.count({
+      where: { competitionId: activeCompetition.id },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -52,7 +71,7 @@ export default async function AdminMembersPage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-heading uppercase">
-            Members ({members.length})
+            Members ({totalCount})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -108,6 +127,30 @@ export default async function AdminMembersPage() {
               ))}
             </TableBody>
           </Table>
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              {page > 1 && (
+                <Link
+                  href={`/admin/members?page=${page - 1}`}
+                  className="rounded-md border border-border bg-card px-3 py-1 text-sm hover:bg-muted"
+                >
+                  Previous
+                </Link>
+              )}
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              {page < totalPages && (
+                <Link
+                  href={`/admin/members?page=${page + 1}`}
+                  className="rounded-md border border-border bg-card px-3 py-1 text-sm hover:bg-muted"
+                >
+                  Next
+                </Link>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

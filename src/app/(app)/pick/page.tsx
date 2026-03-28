@@ -136,7 +136,7 @@ export default async function PickPage() {
             Deadline
           </div>
           <p className="font-heading font-bold">
-            {format(currentGameweek.deadline, "EEE d MMM, HH:mm")}
+            {format(currentGameweek.deadline, "EEE d MMM, HH:mm")} UTC
           </p>
         </div>
       </div>
