@@ -111,6 +111,22 @@ export default function AdminGameweeksPage() {
     loadData();
   }
 
+  async function handleDeleteGameweek(gameweekId: string, weekNumber: number) {
+    if (
+      !confirm(
+        `Delete GW ${weekNumber}? This will remove all selections, fixtures, and free passes, and un-eliminate any players eliminated in this gameweek.`
+      )
+    ) {
+      return;
+    }
+    await fetch("/api/admin/gameweeks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gameweekId }),
+    });
+    loadData();
+  }
+
   return (
     <div className="space-y-6">
       {/* Competition Management */}
@@ -299,6 +315,15 @@ export default function AdminGameweeksPage() {
                           Complete
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          handleDeleteGameweek(gw.id, gw.weekNumber)
+                        }
+                      >
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 ))}

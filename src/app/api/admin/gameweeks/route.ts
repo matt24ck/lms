@@ -52,6 +52,41 @@ export async function POST(req: Request) {
   return NextResponse.json({ gameweek });
 }
 
+export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!session?.user.isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  const { gameweekId } = await req.json();
+
+  if (!gameweekId) {
+    return NextResponse.json(
+      { error: "gameweekId is required" },
+      { status: 400 }
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Un-eliminate all players who were eliminated in this gameweek
+    await tx.competitionUser.updateMany({
+      where: { eliminatedInGameweekId: gameweekId },
+      data: {
+        isEliminated: false,
+        eliminatedAt: null,
+        eliminatedInGameweekId: null,
+      },
+    });
+
+    // Delete the gameweek (cascade deletes selections, fixtures, free passes)
+    await tx.gameweek.delete({
+      where: { id: gameweekId },
+    });
+  });
+
+  return NextResponse.json({ success: true });
+}
+
 export async function PATCH(req: Request) {
   const session = await auth();
   if (!session?.user.isAdmin) {
