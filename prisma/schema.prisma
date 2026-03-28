@@ -133,10 +133,11 @@ model Gameweek {
   competitionId String
   weekNumber    Int
   deadline      DateTime
-  status        GameweekStatus @default(UPCOMING)
-  apiMatchday   Int?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  status                GameweekStatus @default(UPCOMING)
+  apiMatchday           Int?
+  eliminationsProcessed Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   selections  Selection[]

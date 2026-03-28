@@ -9,10 +9,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Find completed gameweeks that haven't been fully processed
+    // Find completed gameweeks that haven't been processed for eliminations yet
     const completedGameweeks = await prisma.gameweek.findMany({
       where: {
         status: "COMPLETED",
+        eliminationsProcessed: false,
         competition: { status: "ACTIVE" },
       },
       include: {
@@ -24,6 +25,11 @@ export async function GET(req: Request) {
     let survived = 0;
 
     for (const gameweek of completedGameweeks) {
+      // Safety check: don't eliminate for "no pick" if deadline hasn't passed
+      if (new Date() < gameweek.deadline) {
+        continue;
+      }
+
       // Get all active (non-eliminated) players in this competition
       const activePlayers = await prisma.competitionUser.findMany({
         where: {
@@ -148,6 +154,12 @@ export async function GET(req: Request) {
           }
         }
       }
+
+      // Mark this gameweek as processed so it won't be re-processed
+      await prisma.gameweek.update({
+        where: { id: gameweek.id },
+        data: { eliminationsProcessed: true },
+      });
     }
 
     return NextResponse.json({
