@@ -7,6 +7,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
+  logger: {
+    error(error) {
+      // Flatten the cause into one line so hosted log viewers can't truncate it
+      const cause = (error as { cause?: { err?: Error } }).cause;
+      console.error(
+        `[auth][error] ${error.name}: ${error.message} | cause: ${
+          cause?.err ? `${cause.err.name}: ${cause.err.message}` : "none"
+        } | stack: ${cause?.err?.stack?.replace(/\n/g, " <- ") ?? "n/a"}`
+      );
+    },
+    warn(code) {
+      console.warn(`[auth][warn] ${code}`);
+    },
+  },
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account && profile) {
