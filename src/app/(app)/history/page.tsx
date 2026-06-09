@@ -127,7 +127,9 @@ export default async function HistoryPage() {
                             ? "default"
                             : sel.result === "PENDING"
                               ? "secondary"
-                              : "destructive"
+                              : sel.result === "VOID"
+                                ? "outline"
+                                : "destructive"
                         }
                         className={
                           sel.result === "WIN"

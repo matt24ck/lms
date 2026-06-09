@@ -161,23 +161,28 @@ enum GameweekStatus {
 // ──────────────────────────────────────────────
 
 model Fixture {
-  id         String   @id @default(cuid())
+  id         String         @id @default(cuid())
   gameweekId String
-  apiMatchId Int      @unique
+  apiMatchId Int            @unique
   homeTeamId Int
   homeTeam   String
   awayTeamId Int
   awayTeam   String
   kickoff    DateTime
-  status     String   @default("SCHEDULED")
-  homeScore  Int?
-  awayScore  Int?
-  updatedAt  DateTime @updatedAt
+  result     FixtureResult?
+  updatedAt  DateTime       @updatedAt
 
   gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
 
   @@index([gameweekId])
   @@map("fixtures")
+}
+
+enum FixtureResult {
+  HOME_WIN
+  DRAW
+  AWAY_WIN
+  POSTPONED
 }
 
 // ──────────────────────────────────────────────
@@ -223,6 +228,7 @@ enum SelectionResult {
   WIN
   DRAW
   LOSS
+  VOID
 }
 
 // ──────────────────────────────────────────────

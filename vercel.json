@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/fetch-results",
-      "schedule": "0 22 * * *"
-    },
-    {
-      "path": "/api/cron/process-eliminations",
-      "schedule": "0 1 * * *"
+      "path": "/api/cron/send-reminders",
+      "schedule": "0 10 * * *"
     }
   ]
 }

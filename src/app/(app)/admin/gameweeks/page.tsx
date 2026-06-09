@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,6 @@ interface Competition {
 }
 
 export default function AdminGameweeksPage() {
-  const router = useRouter();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [gameweeks, setGameweeks] = useState<Gameweek[]>([]);
   const [showCreateComp, setShowCreateComp] = useState(false);
@@ -42,12 +41,9 @@ export default function AdminGameweeksPage() {
   const [gwDeadline, setGwDeadline] = useState("");
   const [gwMatchday, setGwMatchday] = useState("");
   const [loading, setLoading] = useState(false);
+  const [createNotice, setCreateNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const compRes = await fetch("/api/admin/competitions");
     if (compRes.ok) {
       const data = await compRes.json();
@@ -59,7 +55,14 @@ export default function AdminGameweeksPage() {
       const data = await gwRes.json();
       setGameweeks(data.gameweeks);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    async function load() {
+      await loadData();
+    }
+    load();
+  }, [loadData]);
 
   async function handleCreateCompetition(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +96,13 @@ export default function AdminGameweeksPage() {
       }),
     });
     if (res.ok) {
+      const data = await res.json();
+      setCreateNotice(
+        data.warning ??
+          (data.fixtureCount !== undefined
+            ? `Gameweek created with ${data.fixtureCount} fixtures.`
+            : null)
+      );
       setShowCreateGw(false);
       setGwNumber("");
       setGwDeadline("");
@@ -254,7 +264,7 @@ export default function AdminGameweeksPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="gwMatchday">
-                          API Matchday (optional)
+                          PL Matchday (optional)
                         </Label>
                         <Input
                           id="gwMatchday"
@@ -263,6 +273,9 @@ export default function AdminGameweeksPage() {
                           value={gwMatchday}
                           onChange={(e) => setGwMatchday(e.target.value)}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Fixtures are fetched automatically on create.
+                        </p>
                       </div>
                     </div>
                     <DialogFooter>
@@ -276,6 +289,11 @@ export default function AdminGameweeksPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {createNotice && (
+              <p className="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm">
+                {createNotice}
+              </p>
+            )}
             {gameweeks.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No gameweeks created yet.
@@ -307,12 +325,8 @@ export default function AdminGameweeksPage() {
                         </Button>
                       )}
                       {gw.status === "ACTIVE" && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleUpdateStatus(gw.id, "COMPLETED")}
-                        >
-                          Complete
+                        <Button size="sm" variant="secondary" asChild>
+                          <Link href="/admin/results">Enter results →</Link>
                         </Button>
                       )}
                       <Button

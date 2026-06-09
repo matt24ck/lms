@@ -1,12 +1,12 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { clsx } from "clsx";
 
 const adminLinks = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/selections", label: "Selections" },
+  { href: "/admin/results", label: "Results" },
   { href: "/admin/statistics", label: "Statistics" },
   { href: "/admin/gameweeks", label: "Gameweeks" },
 ];

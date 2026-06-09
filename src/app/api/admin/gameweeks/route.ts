@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { fetchAndUpsertFixtures } from "@/lib/fixtures";
 
 export async function GET() {
   const session = await auth();
@@ -19,7 +20,15 @@ export async function GET() {
   const gameweeks = await prisma.gameweek.findMany({
     where: { competitionId: activeCompetition.id },
     orderBy: { weekNumber: "desc" },
-    select: { id: true, weekNumber: true, status: true, deadline: true },
+    select: {
+      id: true,
+      weekNumber: true,
+      status: true,
+      deadline: true,
+      apiMatchday: true,
+      eliminationsProcessed: true,
+      _count: { select: { fixtures: true } },
+    },
   });
 
   return NextResponse.json({ gameweeks });
@@ -48,6 +57,25 @@ export async function POST(req: Request) {
       apiMatchday: apiMatchday ?? null,
     },
   });
+
+  // Fetch fixtures from the API at creation time. A failure doesn't roll the
+  // gameweek back — the admin can retry via "Refresh fixtures".
+  if (gameweek.apiMatchday !== null) {
+    try {
+      const fixtureCount = await fetchAndUpsertFixtures(
+        gameweek.id,
+        gameweek.apiMatchday
+      );
+      return NextResponse.json({ gameweek, fixtureCount });
+    } catch (error) {
+      console.error("Failed to fetch fixtures on gameweek create:", error);
+      return NextResponse.json({
+        gameweek,
+        warning:
+          "Gameweek created, but fixtures could not be fetched. Use Refresh Fixtures on the Results page to retry.",
+      });
+    }
+  }
 
   return NextResponse.json({ gameweek });
 }
@@ -98,6 +126,16 @@ export async function PATCH(req: Request) {
   if (!gameweekId) {
     return NextResponse.json(
       { error: "gameweekId is required" },
+      { status: 400 }
+    );
+  }
+
+  if (status === "COMPLETED") {
+    return NextResponse.json(
+      {
+        error:
+          "Gameweeks are completed via the finalize endpoint on the Results page, so eliminations are always processed",
+      },
       { status: 400 }
     );
   }

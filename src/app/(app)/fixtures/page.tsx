@@ -85,23 +85,47 @@ export default async function FixturesPage() {
                     className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3"
                   >
                     <div className="flex-1 text-right">
-                      <span className="font-medium">{fixture.homeTeam}</span>
+                      <span
+                        className={
+                          fixture.result === "HOME_WIN"
+                            ? "font-bold"
+                            : "font-medium"
+                        }
+                      >
+                        {fixture.homeTeam}
+                      </span>
                     </div>
 
                     <div className="mx-4 flex items-center gap-2">
-                      {fixture.status === "FINISHED" ? (
-                        <span className="font-heading text-lg font-bold">
-                          {fixture.homeScore} - {fixture.awayScore}
-                        </span>
-                      ) : (
+                      {fixture.result === null ? (
                         <span className="text-sm text-muted-foreground">
                           {format(fixture.kickoff, "EEE HH:mm")}
+                        </span>
+                      ) : fixture.result === "POSTPONED" ? (
+                        <span className="text-sm font-medium text-muted-foreground">
+                          P-P
+                        </span>
+                      ) : (
+                        <span className="font-heading text-sm font-bold uppercase">
+                          {fixture.result === "HOME_WIN"
+                            ? "Home win"
+                            : fixture.result === "AWAY_WIN"
+                              ? "Away win"
+                              : "Draw"}
                         </span>
                       )}
                     </div>
 
                     <div className="flex-1 text-left">
-                      <span className="font-medium">{fixture.awayTeam}</span>
+                      <span
+                        className={
+                          fixture.result === "AWAY_WIN"
+                            ? "font-bold"
+                            : "font-medium"
+                        }
+                      >
+                        {fixture.awayTeam}
+                      </span>
                     </div>
                   </div>
                 ))}

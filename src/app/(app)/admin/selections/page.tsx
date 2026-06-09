@@ -96,7 +96,9 @@ export default async function AdminSelectionsPage() {
                                 ? "default"
                                 : sel.result === "PENDING"
                                   ? "secondary"
-                                  : "destructive"
+                                  : sel.result === "VOID"
+                                    ? "outline"
+                                    : "destructive"
                             }
                             className={
                               sel.result === "WIN"

@@ -159,7 +159,9 @@ export default async function DashboardPage() {
                     ? "default"
                     : currentSelection.result === "PENDING"
                       ? "secondary"
-                      : "destructive"
+                      : currentSelection.result === "VOID"
+                        ? "outline"
+                        : "destructive"
                 }
                 className="mt-1"
               >
@@ -224,7 +226,9 @@ export default async function DashboardPage() {
                         ? "default"
                         : sel.result === "PENDING"
                           ? "secondary"
-                          : "destructive"
+                          : sel.result === "VOID"
+                            ? "outline"
+                            : "destructive"
                     }
                     className={
                       sel.result === "WIN"
