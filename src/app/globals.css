@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────
+   Design tokens, matched to prosportsadvice.com
+   Canvas #1c1c1c, crimson #c11212, gold #f7c630,
+   Montserrat display + Inter body.
+   ────────────────────────────────────────────────────────────── */
+
+@theme {
+  --font-display: var(--font-montserrat), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-canvas: #1c1c1c;
+  --color-surface: #1f1f1f;
+  --color-surface-raised: #2a2a2a;
+  --color-surface-sunken: #181818;
+
+  /* Lines */
+  --color-line: #313131;
+  --color-line-bright: #434343;
+
+  /* Text. --color-ink-faint mirrors the site's #666; it clears WCAG AA
+     only at large sizes, so body-level secondary text uses ink-muted. */
+  --color-ink: #ffffff;
+  --color-ink-soft: #fbfbfb;
+  --color-ink-muted: #a3a3a3;
+  --color-ink-faint: #6b6b6b;
+
+  /* Brand */
+  --color-crimson: #c11212;
+  --color-crimson-bright: #cc1e24;
+  --color-crimson-deep: #751819;
+  --color-crimson-night: #2e0d0d;
+  --color-crimson-shadow: #340e0d;
+
+  /* Accents */
+  --color-gold: #f7c630;
+  --color-flare: #f15b5b;
+  --color-pitch: #3fb950;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: var(--color-crimson);
+    color: #fff;
+  }
+
+  /* Keyboard focus stays visible against the dark canvas. */
+  :focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface-sunken);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-bright);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-crimson-deep);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Typographic scale from the reference site:
+   h1 5rem desktop → 2rem mobile, h2 3.5rem → 2rem.
+   ────────────────────────────────────────────────────────────── */
+
+@utility display-1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 6vw, 5rem);
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+@utility display-2 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+}
+
+@utility display-3 {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+/* Small uppercase kicker, used above headings and as table/field labels. */
+@utility eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Page container — the reference site caps content at 1400px. */
+@utility shell {
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+/* Thin crimson rule used to underline section headings. */
+@utility rule-crimson {
+  position: relative;
+  padding-bottom: 0.75rem;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 3rem;
+    height: 3px;
+    background-color: var(--color-crimson);
+    border-radius: 1px;
+  }
+}

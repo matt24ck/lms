@@ -1,0 +1,282 @@
+// Premier League Last Man Standing — data model
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 no longer accepts `url` here. The CLI reads it from
+// prisma.config.ts; the runtime client gets it via the pg driver adapter in
+// src/lib/prisma.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────────────────────────
+// Auth.js (NextAuth v5) tables
+// ──────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  /// Platform admin — can create leagues and settle gameweeks.
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    LeagueMember[]
+  createdLeagues League[]       @relation("LeagueCreator")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ──────────────────────────────────────────────────────────
+// Reference data — Premier League teams (from football-data.org)
+// ──────────────────────────────────────────────────────────
+
+model Team {
+  id         String  @id @default(cuid())
+  externalId Int     @unique
+  name       String
+  shortName  String
+  tla        String
+  crestUrl   String?
+
+  @@map("teams")
+}
+
+// ──────────────────────────────────────────────────────────
+// League
+// ──────────────────────────────────────────────────────────
+
+model League {
+  id       String       @id @default(cuid())
+  name     String
+  season   String
+  /// 6-character code players enter to join.
+  joinCode String       @unique
+  status   LeagueStatus @default(OPEN)
+
+  createdById String
+  createdBy   User   @relation("LeagueCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   LeagueMember[]
+  gameweeks Gameweek[]
+
+  @@map("leagues")
+}
+
+enum LeagueStatus {
+  /// Accepting new players via join code.
+  OPEN
+  /// Under way; join code no longer accepts entrants.
+  IN_PROGRESS
+  /// A winner has been decided.
+  COMPLETE
+}
+
+model LeagueMember {
+  id       String       @id @default(cuid())
+  leagueId String
+  userId   String
+  status   MemberStatus @default(ALIVE)
+
+  /// Team pool cycle. Increments when the player has used all available
+  /// teams, making the full pool selectable again.
+  poolRound Int @default(1)
+
+  eliminatedAtGameweekId String?
+  eliminatedAt           DateTime?
+  joinedAt               DateTime  @default(now())
+
+  league           League    @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eliminatedAtWeek Gameweek? @relation("EliminatedMembers", fields: [eliminatedAtGameweekId], references: [id])
+  picks            Pick[]
+
+  @@unique([leagueId, userId])
+  @@index([leagueId, status])
+  @@map("league_members")
+}
+
+enum MemberStatus {
+  ALIVE
+  ELIMINATED
+}
+
+// ──────────────────────────────────────────────────────────
+// Gameweek
+// ──────────────────────────────────────────────────────────
+
+model Gameweek {
+  id         String @id @default(cuid())
+  leagueId   String
+  weekNumber Int
+  /// football-data.org matchday this gameweek mirrors.
+  matchday   Int
+
+  /// Picks are rejected after this instant.
+  deadline DateTime
+  status   GameweekStatus @default(OPEN)
+
+  /// Set when every remaining player's team failed in the same gameweek.
+  /// Nobody is eliminated, picks are marked VOID and the teams involved
+  /// become selectable again, so the competition can still produce a winner.
+  isVoid Boolean @default(false)
+
+  settledAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  league            League         @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  fixtures          Fixture[]
+  picks             Pick[]
+  winningTeams      WinningTeam[]
+  eliminatedMembers LeagueMember[] @relation("EliminatedMembers")
+
+  @@unique([leagueId, weekNumber])
+  @@index([leagueId, status])
+  @@map("gameweeks")
+}
+
+enum GameweekStatus {
+  /// Live — survivors may submit or change a pick.
+  OPEN
+  /// Deadline passed, awaiting results.
+  LOCKED
+  /// Winners recorded and eliminations processed.
+  SETTLED
+}
+
+model Fixture {
+  id         String @id @default(cuid())
+  gameweekId String
+  /// football-data.org match id.
+  externalId Int    @unique
+
+  homeTeamId   Int
+  homeTeamName String
+  homeTeamTla  String
+  homeCrestUrl String?
+
+  awayTeamId   Int
+  awayTeamName String
+  awayTeamTla  String
+  awayCrestUrl String?
+
+  kickoff DateTime
+
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@index([gameweekId])
+  @@map("fixtures")
+}
+
+/// A team the admin marked as having won this gameweek. Any pick whose team
+/// is absent from this list is treated as not having won (draw, loss or
+/// postponement) and eliminates the player.
+model WinningTeam {
+  id             String @id @default(cuid())
+  gameweekId     String
+  teamExternalId Int
+  teamName       String
+
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@unique([gameweekId, teamExternalId])
+  @@map("winning_teams")
+}
+
+// ──────────────────────────────────────────────────────────
+// Pick
+// ──────────────────────────────────────────────────────────
+
+model Pick {
+  id       String @id @default(cuid())
+  memberId String
+
+  gameweekId     String
+  teamExternalId Int
+  teamName       String
+  teamTla        String
+
+  /// Pool cycle this pick belongs to, copied from the member at pick time so
+  /// history survives a pool reset.
+  poolRound Int @default(1)
+
+  outcome   PickOutcome @default(PENDING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  member   LeagueMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  gameweek Gameweek     @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, gameweekId])
+  @@index([memberId, poolRound])
+  @@index([gameweekId])
+  @@map("picks")
+}
+
+enum PickOutcome {
+  /// Submitted, gameweek not yet settled.
+  PENDING
+  /// Team won — player survives.
+  WON
+  /// Team did not win — player eliminated.
+  LOST
+  /// Gameweek settled with no pick submitted — player eliminated.
+  MISSED
+  /// Every remaining player failed this gameweek, so it was voided. The pick
+  /// does not count against the player's team pool.
+  VOID
+}
