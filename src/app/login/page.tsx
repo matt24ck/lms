@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Sign in" };
 const errorMessages: Record<string, string> = {
   OAuthAccountNotLinked:
     "That Discord account is already linked to a different player.",
-  AccessDenied: "Discord sign-in was cancelled or denied.",
+  AccessDenied:
+    "Discord sign-in was denied. If you didn't cancel it yourself, check that your Discord account's email address is verified (Discord Settings → My Account), then try again.",
   Configuration:
     "Discord sign-in is not configured correctly. Check AUTH_DISCORD_ID, AUTH_DISCORD_SECRET and AUTH_SECRET.",
 };
