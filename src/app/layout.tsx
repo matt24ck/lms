@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
-import { Inter, Montserrat } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const inter = Inter({
+// Self-hosted variable fonts (latin subset). next/font/google fetches from
+// Google at build time, which flakes on Vercel build machines and kills the
+// deploy — local files make the build deterministic.
+const inter = localFont({
+  src: "./fonts/inter-latin-var.woff2",
   variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "100 900",
   display: "swap",
 });
 
-const montserrat = Montserrat({
+const montserrat = localFont({
+  src: "./fonts/montserrat-latin-var.woff2",
   variable: "--font-montserrat",
-  subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
+  weight: "100 900",
   display: "swap",
 });
 
