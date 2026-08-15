@@ -47,7 +47,7 @@ export default async function LeaguePage({
 
   const membership = await prisma.leagueMember.findUnique({
     where: { leagueId_userId: { leagueId, userId: user.id } },
-    select: { id: true, status: true, poolRound: true },
+    select: { id: true, status: true, poolRound: true, lifelines: true },
   });
   if (!membership) notFound();
 
@@ -160,11 +160,18 @@ export default async function LeaguePage({
           value={membership.status === MemberStatus.ALIVE ? "In" : "Out"}
           tone={membership.status === MemberStatus.ALIVE ? "pitch" : "crimson"}
           hint={
-            myPick
-              ? `This week: ${myPick.teamName}`
-              : membership.status === MemberStatus.ALIVE
-                ? "No pick submitted"
-                : undefined
+            [
+              myPick
+                ? `This week: ${myPick.teamName}`
+                : membership.status === MemberStatus.ALIVE
+                  ? "No pick submitted"
+                  : null,
+              membership.lifelines > 0
+                ? `${membership.lifelines} lifeline${membership.lifelines === 1 ? "" : "s"} held`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined
           }
         />
       </div>
@@ -217,11 +224,21 @@ export default async function LeaguePage({
                           </span>
                         </Td>
                         <Td>
-                          {member.status === MemberStatus.ALIVE ? (
-                            <Badge tone="alive">In</Badge>
-                          ) : (
-                            <Badge tone="out">Out</Badge>
-                          )}
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            {member.status === MemberStatus.ALIVE ? (
+                              <Badge tone="alive">In</Badge>
+                            ) : (
+                              <Badge tone="out">Out</Badge>
+                            )}
+                            {member.lifelines > 0 ? (
+                              <Badge
+                                tone="gold"
+                                title={`${member.lifelines} lifeline${member.lifelines === 1 ? "" : "s"}`}
+                              >
+                                ♥ {member.lifelines}
+                              </Badge>
+                            ) : null}
+                          </span>
                         </Td>
                         <Td className="text-center tabular-nums">
                           {usedCounts.get(member.id) ?? 0}
@@ -242,6 +259,8 @@ export default async function LeaguePage({
                                 <Badge tone="alive">Won</Badge>
                               ) : pick.outcome === PickOutcome.LOST ? (
                                 <Badge tone="out">Lost</Badge>
+                              ) : pick.outcome === PickOutcome.SAVED ? (
+                                <Badge tone="gold">Saved</Badge>
                               ) : pick.outcome === PickOutcome.VOID ? (
                                 <Badge tone="pending">Void</Badge>
                               ) : null}

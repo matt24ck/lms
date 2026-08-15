@@ -17,8 +17,10 @@ with Discord sign-in, and Tailwind v4 styled to match prosportsadvice.com.
 | Missing the deadline | Counts as a loss — the player is eliminated when the gameweek is settled. |
 | Results | The admin ends the gameweek and marks which teams won. Anything other than a win eliminates the player. |
 | Running out of teams | Once a player has used all 20 teams their pool resets and every team is available again. |
-| Everyone goes out at once | The gameweek is **voided**: nobody is eliminated, those picks don't count against anyone's pool, and play continues. |
-| Winning | When one player is left the league is marked complete. |
+| Everyone goes out at once | The gameweek is **voided**: nobody is eliminated, those picks don't count against anyone's pool, no lifelines burn, and play continues. |
+| Lifelines | An admin can grant lifelines to any player at any time. When a settle would eliminate that player (loss **or** missed pick), one lifeline burns instead and they survive; a losing pick saved this way still counts as a used team. Lifeline counts are visible to everyone. |
+| Revival | An admin can bring an eliminated player back at any time. Their pick history and used teams are kept, and reviving into a finished league reopens it. |
+| Winning | When one player is left (a lifeline save counts as surviving) the league is marked complete. |
 
 Two deliberate choices worth knowing:
 
@@ -115,7 +117,12 @@ npm run dev
 - **Postponed matches.** Mark the fixture as "Draw / no result" — anyone who
   picked either side is eliminated, which is the usual house rule. If you'd
   rather not penalise them, wait until the match is played before settling.
-- **Settling is final.** There is no un-settle, and the confirmation copy says so.
+- **Settling is final.** There is no un-settle, and the confirmation copy says
+  so. If someone was knocked out by a wrong result, the remedy is **Revive** in
+  the league's players table — their used teams and history survive intact.
+- **Lifelines** are managed from the same table (the +/− control). Granting is
+  unrestricted; removing stops at zero. The settle screen lists who holds
+  lifelines before you confirm results.
 
 ---
 
@@ -123,7 +130,8 @@ npm run dev
 
 `scripts/verify-game-logic.ts` exercises the engine against a real database:
 eliminations, missed picks, repeat-team rejection, deadline locking, void
-rounds, pool resets and league completion (38 assertions).
+rounds, pool resets, league completion, lifeline burns and revival
+(63 assertions).
 
 It **deletes all data**, so point it at a scratch database only. The
 `LMS_ALLOW_WIPE` guard exists to stop it ever running against Supabase:

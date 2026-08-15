@@ -135,6 +135,10 @@ model LeagueMember {
   /// teams, making the full pool selectable again.
   poolRound Int @default(1)
 
+  /// Admin-granted shields. When a settle would eliminate this player, one
+  /// lifeline is consumed instead and they survive. Not burned in void weeks.
+  lifelines Int @default(0)
+
   eliminatedAtGameweekId String?
   eliminatedAt           DateTime?
   joinedAt               DateTime  @default(now())
@@ -276,6 +280,9 @@ enum PickOutcome {
   LOST
   /// Gameweek settled with no pick submitted — player eliminated.
   MISSED
+  /// Team did not win, but a lifeline was consumed — player survives and the
+  /// team still counts as used.
+  SAVED
   /// Every remaining player failed this gameweek, so it was voided. The pick
   /// does not count against the player's team pool.
   VOID

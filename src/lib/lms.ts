@@ -10,8 +10,13 @@ import { GameweekStatus, MemberStatus, PickOutcome } from "@/generated/prisma/en
  *   and all teams become available again.
  * • Settling a gameweek: the admin marks the teams that won. A pick on a team
  *   not in that list is a loss, and no pick at all is a miss. Both eliminate.
+ * • Lifelines: an admin-granted shield held by a player. When a settle would
+ *   eliminate them (loss or missed pick), one lifeline burns instead and they
+ *   survive. A losing pick saved this way still counts as a used team.
  * • If settling would eliminate every remaining player at once, the gameweek is
- *   voided instead — nobody goes out — so the league can still find a winner.
+ *   voided instead — nobody goes out and no lifelines burn — so the league can
+ *   still find a winner.
+ * • Revive: an admin can restore an eliminated player to the game at any time.
  */
 
 export class GameRuleError extends Error {
@@ -156,6 +161,8 @@ export async function submitPick({
 export interface SettleSummary {
   voided: boolean;
   survived: string[];
+  /** Members who would have gone out but burned a lifeline instead. */
+  saved: string[];
   eliminated: string[];
   missed: string[];
   poolResets: string[];
@@ -207,7 +214,7 @@ export async function settleGameweek({
 
     const aliveMembers = await tx.leagueMember.findMany({
       where: { leagueId: gameweek.leagueId, status: MemberStatus.ALIVE },
-      select: { id: true, poolRound: true },
+      select: { id: true, poolRound: true, lifelines: true },
     });
 
     if (aliveMembers.length === 0) {
@@ -235,7 +242,9 @@ export async function settleGameweek({
       }
     }
 
-    // Everyone still in would go out together — void the round instead.
+    // Everyone's team failed together — void the round instead. Lifelines are
+    // deliberately untouched here: a scrubbed week shouldn't cost anyone their
+    // shield.
     const voided = survived.length === 0;
 
     const teamNames = await tx.team.findMany({
@@ -271,6 +280,7 @@ export async function settleGameweek({
       return {
         voided: true,
         survived: aliveMembers.map((m) => m.id),
+        saved: [],
         eliminated: [],
         missed,
         poolResets: [],
@@ -279,20 +289,42 @@ export async function settleGameweek({
       };
     }
 
+    // A player who would go out burns a lifeline instead, whether they lost
+    // or simply never picked.
+    const lifelinesById = new Map(aliveMembers.map((m) => [m.id, m.lifelines]));
+    const savedFromLoss = lost.filter((id) => (lifelinesById.get(id) ?? 0) > 0);
+    const savedFromMiss = missed.filter((id) => (lifelinesById.get(id) ?? 0) > 0);
+    const saved = [...savedFromLoss, ...savedFromMiss];
+    const eliminatedLost = lost.filter((id) => !savedFromLoss.includes(id));
+    const eliminatedMissed = missed.filter((id) => !savedFromMiss.includes(id));
+
     if (survived.length > 0) {
       await tx.pick.updateMany({
         where: { gameweekId, memberId: { in: survived } },
         data: { outcome: PickOutcome.WON },
       });
     }
-    if (lost.length > 0) {
+    if (savedFromLoss.length > 0) {
       await tx.pick.updateMany({
-        where: { gameweekId, memberId: { in: lost } },
+        where: { gameweekId, memberId: { in: savedFromLoss } },
+        data: { outcome: PickOutcome.SAVED },
+      });
+    }
+    if (eliminatedLost.length > 0) {
+      await tx.pick.updateMany({
+        where: { gameweekId, memberId: { in: eliminatedLost } },
         data: { outcome: PickOutcome.LOST },
       });
     }
 
-    const eliminated = [...lost, ...missed];
+    if (saved.length > 0) {
+      await tx.leagueMember.updateMany({
+        where: { id: { in: saved } },
+        data: { lifelines: { decrement: 1 } },
+      });
+    }
+
+    const eliminated = [...eliminatedLost, ...eliminatedMissed];
     if (eliminated.length > 0) {
       await tx.leagueMember.updateMany({
         where: { id: { in: eliminated } },
@@ -304,11 +336,13 @@ export async function settleGameweek({
       });
     }
 
-    // Survivors who have now used the whole pool get a fresh set of teams.
+    // Anyone who consumed a team this week and has now used the whole pool
+    // gets a fresh set. A lifeline save still consumed the team, so saved
+    // pickers are included; saved no-picks used nothing.
     const totalTeams = await tx.team.count();
     const poolResets: string[] = [];
 
-    for (const memberId of survived) {
+    for (const memberId of [...survived, ...savedFromLoss]) {
       const member = aliveMembers.find((m) => m.id === memberId);
       if (!member) continue;
 
@@ -334,8 +368,10 @@ export async function settleGameweek({
       data: { status: GameweekStatus.SETTLED, settledAt: new Date() },
     });
 
-    // One player left standing ends the competition.
-    const leagueComplete = survived.length === 1;
+    // One player left standing ends the competition. A lifeline save counts
+    // as standing.
+    const aliveAfter = [...survived, ...saved];
+    const leagueComplete = aliveAfter.length === 1;
     if (leagueComplete) {
       await tx.league.update({
         where: { id: gameweek.leagueId },
@@ -346,12 +382,54 @@ export async function settleGameweek({
     return {
       voided: false,
       survived,
-      eliminated: lost,
-      missed,
+      saved,
+      eliminated: eliminatedLost,
+      missed: eliminatedMissed,
       poolResets,
       leagueComplete,
-      winnerMemberIds: leagueComplete ? survived : [],
+      winnerMemberIds: leagueComplete ? aliveAfter : [],
     };
+  });
+}
+
+/**
+ * Restores an eliminated player to the competition. Their pick history is
+ * untouched — the losing pick stays on the record and its team stays used.
+ * Reviving into a league that had already crowned a winner reopens it.
+ */
+export async function reviveMember(memberId: string) {
+  return prisma.$transaction(async (tx) => {
+    const member = await tx.leagueMember.findUnique({
+      where: { id: memberId },
+      select: {
+        id: true,
+        status: true,
+        league: { select: { id: true, status: true } },
+      },
+    });
+
+    if (!member) throw new GameRuleError("Membership not found.");
+    if (member.status !== MemberStatus.ELIMINATED) {
+      throw new GameRuleError("That player has not been eliminated.");
+    }
+
+    await tx.leagueMember.update({
+      where: { id: memberId },
+      data: {
+        status: MemberStatus.ALIVE,
+        eliminatedAt: null,
+        eliminatedAtGameweekId: null,
+      },
+    });
+
+    if (member.league.status === "COMPLETE") {
+      await tx.league.update({
+        where: { id: member.league.id },
+        data: { status: "IN_PROGRESS" },
+      });
+    }
+
+    return { leagueReopened: member.league.status === "COMPLETE" };
   });
 }
 

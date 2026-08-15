@@ -16,7 +16,13 @@ if (process.env.LMS_ALLOW_WIPE !== "1") {
 }
 
 import { prisma } from "@/lib/prisma";
-import { GameRuleError, getTeamPool, settleGameweek, submitPick } from "@/lib/lms";
+import {
+  GameRuleError,
+  getTeamPool,
+  reviveMember,
+  settleGameweek,
+  submitPick,
+} from "@/lib/lms";
 import { GameweekStatus, MemberStatus, PickOutcome } from "@/generated/prisma/enums";
 
 let passed = 0;
@@ -335,6 +341,126 @@ async function main() {
   check(
     "Frank keeps his used team after Eve's reset",
     (await getTeamPool(mFrank.id)).teams.find((t) => t.externalId === 1)?.used === true,
+  );
+
+  // ── Scenario 7: a lifeline saves a losing pick ───────────────────
+  console.log("\nScenario 7 — a lifeline burns instead of eliminating a loser");
+
+  const gina = await makeUser("Gina");
+  const hank = await makeUser("Hank");
+  const league3 = await makeLeague("Lifeline League", "QQQ222", gina.id);
+  const mGina = await prisma.leagueMember.create({
+    data: { leagueId: league3.id, userId: gina.id, lifelines: 1 },
+  });
+  const mHank = await prisma.leagueMember.create({
+    data: { leagueId: league3.id, userId: hank.id },
+  });
+
+  const l3gw1 = await makeGameweek(league3.id, 1);
+  await submitPick({ memberId: mGina.id, gameweekId: l3gw1.id, teamExternalId: 1 });
+  await submitPick({ memberId: mHank.id, gameweekId: l3gw1.id, teamExternalId: 3 });
+
+  const s7 = await settleGameweek({
+    gameweekId: l3gw1.id,
+    winningTeamExternalIds: [2, 3],
+  });
+
+  check("saved list contains the lifeline holder", s7.saved.includes(mGina.id));
+  check("lifeline holder stays alive after losing", (await statusOf(mGina.id)).status === MemberStatus.ALIVE);
+  check("lifeline count decrements to zero", (await statusOf(mGina.id)).lifelines === 0);
+  check("saved pick is marked SAVED", (await outcomeOf(mGina.id, l3gw1.id)) === PickOutcome.SAVED);
+  check("winner is unaffected by another's lifeline", (await outcomeOf(mHank.id, l3gw1.id)) === PickOutcome.WON);
+  check("league is not complete with two still alive", !s7.leagueComplete);
+  check(
+    "a SAVED team still counts as used",
+    (await getTeamPool(mGina.id)).teams.find((t) => t.externalId === 1)?.used === true,
+  );
+
+  // ── Scenario 8: a lifeline saves a missed pick ───────────────────
+  console.log("\nScenario 8 — a lifeline saves a player who never picked");
+
+  await prisma.leagueMember.update({
+    where: { id: mGina.id },
+    data: { lifelines: 1 },
+  });
+
+  const l3gw2 = await makeGameweek(league3.id, 2);
+  await submitPick({ memberId: mHank.id, gameweekId: l3gw2.id, teamExternalId: 5 });
+
+  const s8 = await settleGameweek({
+    gameweekId: l3gw2.id,
+    winningTeamExternalIds: [5],
+  });
+
+  check("no-pick player with lifeline is saved", s8.saved.includes(mGina.id));
+  check("no-pick player stays alive", (await statusOf(mGina.id)).status === MemberStatus.ALIVE);
+  check("lifeline burned by the missed pick", (await statusOf(mGina.id)).lifelines === 0);
+  check("nobody reported eliminated", s8.eliminated.length === 0 && s8.missed.length === 0);
+
+  // ── Scenario 9: void weeks never burn lifelines ──────────────────
+  console.log("\nScenario 9 — a void week leaves lifelines untouched");
+
+  await prisma.leagueMember.update({
+    where: { id: mGina.id },
+    data: { lifelines: 1 },
+  });
+
+  const l3gw3 = await makeGameweek(league3.id, 3);
+  await submitPick({ memberId: mGina.id, gameweekId: l3gw3.id, teamExternalId: 7 });
+  await submitPick({ memberId: mHank.id, gameweekId: l3gw3.id, teamExternalId: 9 });
+
+  const s9 = await settleGameweek({
+    gameweekId: l3gw3.id,
+    winningTeamExternalIds: [8, 10],
+  });
+
+  check("all-fail round still voids with lifelines in hand", s9.voided);
+  check("lifeline is not burned in a void week", (await statusOf(mGina.id)).lifelines === 1);
+
+  // ── Scenario 10: exhausted lifelines, then revive ────────────────
+  console.log("\nScenario 10 — elimination after the last lifeline, then revive");
+
+  const l3gw4 = await makeGameweek(league3.id, 4);
+  await submitPick({ memberId: mGina.id, gameweekId: l3gw4.id, teamExternalId: 9 });
+  await submitPick({ memberId: mHank.id, gameweekId: l3gw4.id, teamExternalId: 11 });
+  await settleGameweek({ gameweekId: l3gw4.id, winningTeamExternalIds: [11] });
+
+  check("last lifeline burned on second loss", (await statusOf(mGina.id)).lifelines === 0);
+  check("still alive after burning last lifeline", (await statusOf(mGina.id)).status === MemberStatus.ALIVE);
+
+  const l3gw5 = await makeGameweek(league3.id, 5);
+  await submitPick({ memberId: mGina.id, gameweekId: l3gw5.id, teamExternalId: 13 });
+  await submitPick({ memberId: mHank.id, gameweekId: l3gw5.id, teamExternalId: 15 });
+  const s10 = await settleGameweek({
+    gameweekId: l3gw5.id,
+    winningTeamExternalIds: [15],
+  });
+
+  check("no lifeline left — player is eliminated", (await statusOf(mGina.id)).status === MemberStatus.ELIMINATED);
+  check("league completes with one survivor", s10.leagueComplete);
+  check(
+    "league marked COMPLETE",
+    (await prisma.league.findUniqueOrThrow({ where: { id: league3.id } })).status === "COMPLETE",
+  );
+
+  await expectRuleError("cannot revive a player who is still alive", () =>
+    reviveMember(mHank.id),
+  );
+
+  const reviveResult = await reviveMember(mGina.id);
+  const revived = await statusOf(mGina.id);
+
+  check("revived player is alive again", revived.status === MemberStatus.ALIVE);
+  check("revive clears the elimination gameweek", revived.eliminatedAtGameweekId === null);
+  check("revive clears the elimination timestamp", revived.eliminatedAt === null);
+  check("reviving into a finished league reopens it", reviveResult.leagueReopened);
+  check(
+    "league back to IN_PROGRESS after revive",
+    (await prisma.league.findUniqueOrThrow({ where: { id: league3.id } })).status === "IN_PROGRESS",
+  );
+  check(
+    "revived player keeps their used teams",
+    (await getTeamPool(mGina.id)).teams.find((t) => t.externalId === 13)?.used === true,
   );
 
   console.log(`\n${passed} passed, ${failed} failed\n`);

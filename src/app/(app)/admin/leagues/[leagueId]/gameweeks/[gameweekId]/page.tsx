@@ -149,6 +149,8 @@ export default async function SettleGameweekPage({
                             <Badge tone="alive">Won</Badge>
                           ) : pick.outcome === PickOutcome.LOST ? (
                             <Badge tone="out">Lost</Badge>
+                          ) : pick.outcome === PickOutcome.SAVED ? (
+                            <Badge tone="gold">Saved by lifeline</Badge>
                           ) : pick.outcome === PickOutcome.VOID ? (
                             <Badge tone="gold">Void</Badge>
                           ) : (
@@ -169,7 +171,22 @@ export default async function SettleGameweekPage({
             <Alert tone="error" title="Players with no pick">
               {playersWithoutPick.map((m) => m.user.name ?? "Player").join(", ")}{" "}
               did not submit a pick and will be eliminated when you end this
-              gameweek.
+              gameweek, unless they hold a lifeline.
+            </Alert>
+          ) : null}
+
+          {aliveMembers.some((m) => m.lifelines > 0) ? (
+            <Alert tone="info" title="Lifelines in play">
+              {aliveMembers
+                .filter((m) => m.lifelines > 0)
+                .map(
+                  (m) =>
+                    `${m.user.name ?? "Player"} (${m.lifelines})`,
+                )
+                .join(", ")}{" "}
+              hold lifelines. If their team fails this gameweek a lifeline is
+              consumed instead of eliminating them, so the totals below may
+              overstate who goes out.
             </Alert>
           ) : null}
 

@@ -235,9 +235,12 @@ export async function settleGameweekAction(
     }
 
     const parts = [
-      `${summary.survived.length} through`,
+      `${summary.survived.length + summary.saved.length} through`,
       `${summary.eliminated.length + summary.missed.length} out`,
     ];
+    if (summary.saved.length > 0) {
+      parts.push(`${summary.saved.length} saved by a lifeline`);
+    }
     if (summary.missed.length > 0) {
       parts.push(`${summary.missed.length} missed the deadline`);
     }

@@ -6,6 +6,10 @@ import { formatCountdown, formatDateTime, isPast } from "@/lib/format";
 import { GameweekStatus, MemberStatus } from "@/generated/prisma/enums";
 import { LaunchGameweekForm } from "@/components/admin/launch-gameweek-form";
 import { LockGameweekButton } from "@/components/admin/lock-gameweek-button";
+import {
+  LifelineControl,
+  ReviveButton,
+} from "@/components/admin/member-actions";
 import { PageHeader, EmptyState } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
@@ -237,8 +241,10 @@ export default async function AdminLeaguePage({
                   <Tr>
                     <Th>Player</Th>
                     <Th>Status</Th>
+                    <Th className="text-center">Lifelines</Th>
                     <Th className="text-center">Pool round</Th>
                     <Th>Joined</Th>
+                    <Th>Actions</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -256,11 +262,29 @@ export default async function AdminLeaguePage({
                           <Badge tone="out">Out</Badge>
                         )}
                       </Td>
+                      <Td className="text-center">
+                        <LifelineControl
+                          leagueId={league.id}
+                          memberId={member.id}
+                          lifelines={member.lifelines}
+                        />
+                      </Td>
                       <Td className="text-center tabular-nums">
                         {member.poolRound}
                       </Td>
                       <Td className="text-ink-muted text-xs">
                         {formatDateTime(member.joinedAt)}
+                      </Td>
+                      <Td>
+                        {member.status === MemberStatus.ELIMINATED ? (
+                          <ReviveButton
+                            leagueId={league.id}
+                            memberId={member.id}
+                            playerName={member.user.name ?? "this player"}
+                          />
+                        ) : (
+                          <span className="text-ink-faint text-xs">—</span>
+                        )}
                       </Td>
                     </Tr>
                   ))}
