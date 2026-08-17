@@ -27,8 +27,12 @@ Two deliberate choices worth knowing:
 - **Picks are hidden until the deadline.** Other players' selections show as
   "Hidden until deadline" so nobody can react to what their rivals chose. Your
   own pick is always visible to you.
-- **Launching gameweek 1 closes the league to new entrants.** Joining after
+- **The first settled result closes the league to new entrants.** A league
+  stays open right up to gameweek 1's pick deadline, so latecomers can join
+  and still get a pick in. Once picks close, joining pauses; once the week is
+  settled with a real result the league closes for good, because joining after
   results are in would be unfair on players who have already survived a round.
+  (A voided gameweek counts for nobody, so it leaves entries open.)
 
 ---
 

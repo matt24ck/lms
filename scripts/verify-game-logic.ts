@@ -181,6 +181,10 @@ async function main() {
   check("summary reports Cara as a miss", summary1.missed.length === 1);
   check("gameweek is SETTLED", (await prisma.gameweek.findUniqueOrThrow({ where: { id: gw1.id } })).status === GameweekStatus.SETTLED);
   check("eliminations record the gameweek", (await statusOf(mBob.id)).eliminatedAtGameweekId === gw1.id);
+  check(
+    "first settled result closes the league to entrants",
+    (await prisma.league.findUniqueOrThrow({ where: { id: league.id } })).status === "IN_PROGRESS",
+  );
 
   // ── Scenario 2: pick validation ──────────────────────────────────
   console.log("\nScenario 2 — pick rules are enforced");
@@ -242,6 +246,34 @@ async function main() {
   check(
     "a team used in a real week stays used after a void week",
     poolAfterVoid.teams.find((t) => t.externalId === 1)?.used === true,
+  );
+
+  // ── Scenario 3b: a voided first week keeps entries open ──────────
+  console.log("\nScenario 3b — a voided first gameweek leaves the league OPEN");
+
+  const [una, vic] = await Promise.all([makeUser("Una"), makeUser("Vic")]);
+  const voidLeague = await makeLeague("Void Opener", "VOID42", una.id);
+  const [mUna, mVic] = await Promise.all(
+    [una, vic].map((user) =>
+      prisma.leagueMember.create({
+        data: { leagueId: voidLeague.id, userId: user.id },
+      }),
+    ),
+  );
+
+  const vgw1 = await makeGameweek(voidLeague.id, 1);
+  await submitPick({ memberId: mUna.id, gameweekId: vgw1.id, teamExternalId: 1 });
+  await submitPick({ memberId: mVic.id, gameweekId: vgw1.id, teamExternalId: 3 });
+
+  const sVoid = await settleGameweek({
+    gameweekId: vgw1.id,
+    winningTeamExternalIds: [2, 4],
+  });
+
+  check("first week voids when everyone loses", sVoid.voided);
+  check(
+    "a voided first week leaves the league OPEN to entrants",
+    (await prisma.league.findUniqueOrThrow({ where: { id: voidLeague.id } })).status === "OPEN",
   );
 
   // ── Scenario 4: deadline lock ────────────────────────────────────

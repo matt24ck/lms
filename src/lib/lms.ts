@@ -16,6 +16,10 @@ import { GameweekStatus, MemberStatus, PickOutcome } from "@/generated/prisma/en
  * • If settling would eliminate every remaining player at once, the gameweek is
  *   voided instead — nobody goes out and no lifelines burn — so the league can
  *   still find a winner.
+ * • Entries: a league stays open to new players until its first real result is
+ *   settled (a voided week doesn't count). Joining is also blocked whenever the
+ *   current gameweek's picks are closed — deadline passed or locked — because a
+ *   new entrant could no longer take part in it.
  * • Revive: an admin can restore an eliminated player to the game at any time.
  */
 
@@ -191,6 +195,7 @@ export async function settleGameweek({
         id: true,
         leagueId: true,
         status: true,
+        league: { select: { status: true } },
         fixtures: { select: { homeTeamId: true, awayTeamId: true } },
       },
     });
@@ -376,6 +381,15 @@ export async function settleGameweek({
       await tx.league.update({
         where: { id: gameweek.leagueId },
         data: { status: "COMPLETE" },
+      });
+    } else if (gameweek.league.status === "OPEN") {
+      // The first settled result closes the league to new entrants — joining
+      // once results are in would be unfair on everyone who survived them.
+      // A voided week counts for nobody, so it returns early above and leaves
+      // entries open.
+      await tx.league.update({
+        where: { id: gameweek.leagueId },
+        data: { status: "IN_PROGRESS" },
       });
     }
 

@@ -108,6 +108,26 @@ export async function joinLeagueAction(
     };
   }
 
+  // The league stays OPEN through its first gameweek so latecomers can still
+  // get a pick in — but once that gameweek's picks close (deadline passed or
+  // locked early), a new entrant couldn't play it, so entries pause until the
+  // week is settled. A real result then closes the league for good; a voided
+  // week reopens entries.
+  const activeGameweek = await prisma.gameweek.findFirst({
+    where: { leagueId: league.id, status: { in: ["OPEN", "LOCKED"] } },
+    select: { status: true, deadline: true },
+  });
+  if (
+    activeGameweek &&
+    (activeGameweek.status === "LOCKED" ||
+      activeGameweek.deadline.getTime() <= Date.now())
+  ) {
+    return {
+      error:
+        "Picks for that league's current gameweek have closed, so it is not taking new players right now.",
+    };
+  }
+
   const existing = await prisma.leagueMember.findUnique({
     where: { leagueId_userId: { leagueId: league.id, userId: user.id } },
     select: { id: true },

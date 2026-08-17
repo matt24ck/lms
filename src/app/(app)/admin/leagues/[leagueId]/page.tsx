@@ -106,7 +106,7 @@ export default async function AdminLeaguePage({
           }
           hint={
             league.status === "OPEN"
-              ? "Players can still join with the code"
+              ? "Players can join with the code until gameweek 1's picks close"
               : league.status === "IN_PROGRESS"
                 ? "Closed to new players"
                 : undefined

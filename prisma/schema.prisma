@@ -117,9 +117,10 @@ model League {
 }
 
 enum LeagueStatus {
-  /// Accepting new players via join code.
+  /// Accepting new players via join code. Stays OPEN through the first
+  /// gameweek; joins are refused while that week's picks are closed.
   OPEN
-  /// Under way; join code no longer accepts entrants.
+  /// First real result settled; join code no longer accepts entrants.
   IN_PROGRESS
   /// A winner has been decided.
   COMPLETE

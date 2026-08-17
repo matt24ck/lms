@@ -50,8 +50,9 @@ export async function syncTeamsAction(
 
 /**
  * Creates the next gameweek for a league and caches that matchday's fixtures.
- * Closes the league to new entrants, since joining once results are in would
- * be unfair on everyone who has already survived a round.
+ * Launching does NOT close the league to new entrants — the league stays OPEN
+ * until its first real result is settled (see settleGameweek), so players can
+ * keep joining right up to the gameweek 1 deadline.
  */
 export async function launchGameweekAction(
   _prev: ActionState,
@@ -156,13 +157,6 @@ export async function launchGameweekAction(
           kickoff: new Date(match.utcDate),
         })),
       });
-
-      if (league.status === "OPEN") {
-        await tx.league.update({
-          where: { id: leagueId },
-          data: { status: "IN_PROGRESS" },
-        });
-      }
     });
   } catch (error) {
     console.error("launchGameweekAction failed", error);
