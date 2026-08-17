@@ -69,19 +69,46 @@ export default async function AdminLeaguePage({
   const openGameweekPicks = openGameweek
     ? await prisma.pick.findMany({
         where: { gameweekId: openGameweek.id },
-        select: { memberId: true, teamName: true },
+        select: {
+          memberId: true,
+          teamName: true,
+          teamTla: true,
+          teamExternalId: true,
+        },
       })
     : [];
   const pickByMemberId = new Map(
-    openGameweekPicks.map((pick) => [pick.memberId, pick.teamName]),
+    openGameweekPicks.map((pick) => [pick.memberId, pick]),
   );
-  const currentPickRows = alive
-    .map((member) => ({
-      memberId: member.id,
-      playerName: member.user.name ?? "Player",
-      teamName: pickByMemberId.get(member.id) ?? null,
-    }))
-    .sort((a, b) => a.playerName.localeCompare(b.playerName));
+
+  // Pick counts per team for the gameweek in play, surviving players only.
+  // Teams nobody has picked don't get a column.
+  const teamCountMap = new Map<
+    number,
+    { id: number; name: string; tla: string; count: number }
+  >();
+  const yetToPick: string[] = [];
+  for (const member of alive) {
+    const pick = pickByMemberId.get(member.id);
+    if (!pick) {
+      yetToPick.push(member.user.name ?? "Player");
+      continue;
+    }
+    const entry = teamCountMap.get(pick.teamExternalId);
+    if (entry) entry.count += 1;
+    else
+      teamCountMap.set(pick.teamExternalId, {
+        id: pick.teamExternalId,
+        name: pick.teamName,
+        tla: pick.teamTla,
+        count: 1,
+      });
+  }
+  const teamCounts = [...teamCountMap.values()].sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+  );
+  const maxCount = teamCounts[0]?.count ?? 0;
+  yetToPick.sort((a, b) => a.localeCompare(b));
   const lastMatchday = league.gameweeks[0]?.matchday ?? 0;
 
   const launchBlockedReason =
@@ -157,44 +184,56 @@ export default async function AdminLeaguePage({
             <h2 className="display-3 rule-crimson mb-5">
               Gameweek {openGameweek.weekNumber} picks
             </h2>
-            {currentPickRows.length === 0 ? (
+            {teamCounts.length === 0 ? (
               <EmptyState
-                title="No surviving players"
-                description="There is nobody left to make a pick this gameweek."
+                title="No picks yet"
+                description={
+                  alive.length === 0
+                    ? "There is nobody left to make a pick this gameweek."
+                    : "Nobody has made a pick for this gameweek yet."
+                }
               />
             ) : (
               <>
-                <TableWrap>
-                  <Table>
-                    <Thead>
-                      <Tr>
-                        <Th>Player</Th>
-                        <Th>Pick</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {currentPickRows.map((row) => (
-                        <Tr key={row.memberId}>
-                          <Td>
-                            <span className="font-medium">{row.playerName}</span>
-                          </Td>
-                          <Td>
-                            {row.teamName ? (
-                              <span className="font-display font-bold uppercase">
-                                {row.teamName}
-                              </span>
-                            ) : (
-                              <Badge tone="pending">No pick yet</Badge>
-                            )}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </Tbody>
-                  </Table>
-                </TableWrap>
-                {openGameweek.status === GameweekStatus.OPEN ? (
+                <div className="border-line bg-surface w-full overflow-x-auto rounded-[12px] border p-5">
+                  <div className="flex min-w-fit">
+                    {teamCounts.map((team) => (
+                      <div
+                        key={team.id}
+                        className="flex max-w-24 min-w-14 flex-1 flex-col"
+                        title={`${team.name}: ${team.count} pick${team.count === 1 ? "" : "s"}`}
+                      >
+                        <div className="border-line flex h-40 flex-col items-center justify-end gap-1.5 border-b px-1.5">
+                          <span className="text-ink-soft text-sm font-semibold tabular-nums">
+                            {team.count}
+                          </span>
+                          <div
+                            aria-hidden
+                            className="bg-crimson w-full max-w-10 rounded-t-[4px]"
+                            style={{
+                              height: `${Math.max((team.count / maxCount) * 120, 4)}px`,
+                            }}
+                          />
+                        </div>
+                        <span
+                          className="eyebrow text-ink-muted truncate pt-2 text-center"
+                          title={team.name}
+                        >
+                          {team.tla}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {yetToPick.length > 0 ||
+                openGameweek.status === GameweekStatus.OPEN ? (
                   <p className="text-ink-faint mt-3 text-xs">
-                    Players can still change their pick until the deadline.
+                    {yetToPick.length > 0
+                      ? `Yet to pick: ${yetToPick.join(", ")}. `
+                      : null}
+                    {openGameweek.status === GameweekStatus.OPEN
+                      ? "Players can still change their pick until the deadline."
+                      : null}
                   </p>
                 ) : null}
               </>
