@@ -200,7 +200,7 @@ export default async function LeaguePage({
                     const pick =
                       focus?.picks.find((p) => p.memberId === member.id) ?? null;
                     const isMe = member.id === membership.id;
-                    const showPick = revealPicks || isMe;
+                    const showPick = revealPicks || isMe || user.isAdmin;
 
                     return (
                       <Tr key={member.id}>
@@ -279,7 +279,9 @@ export default async function LeaguePage({
             </TableWrap>
             {!revealPicks && activeGameweek ? (
               <p className="text-ink-faint mt-3 text-xs">
-                Everyone&apos;s picks are revealed once the deadline passes.
+                {user.isAdmin
+                  ? "You can see everyone's picks because you are an admin. Players only see each other's picks once the deadline passes."
+                  : "Everyone's picks are revealed once the deadline passes."}
               </p>
             ) : null}
           </section>

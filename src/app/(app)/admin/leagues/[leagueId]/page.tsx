@@ -65,6 +65,23 @@ export default async function AdminLeaguePage({
   const openGameweek = league.gameweeks.find(
     (gw) => gw.status !== GameweekStatus.SETTLED,
   );
+
+  const openGameweekPicks = openGameweek
+    ? await prisma.pick.findMany({
+        where: { gameweekId: openGameweek.id },
+        select: { memberId: true, teamName: true },
+      })
+    : [];
+  const pickByMemberId = new Map(
+    openGameweekPicks.map((pick) => [pick.memberId, pick.teamName]),
+  );
+  const currentPickRows = alive
+    .map((member) => ({
+      memberId: member.id,
+      playerName: member.user.name ?? "Player",
+      teamName: pickByMemberId.get(member.id) ?? null,
+    }))
+    .sort((a, b) => a.playerName.localeCompare(b.playerName));
   const lastMatchday = league.gameweeks[0]?.matchday ?? 0;
 
   const launchBlockedReason =
@@ -133,6 +150,57 @@ export default async function AdminLeaguePage({
             />
           </CardContent>
         </Card>
+
+        {/* Current picks */}
+        {openGameweek ? (
+          <section>
+            <h2 className="display-3 rule-crimson mb-5">
+              Gameweek {openGameweek.weekNumber} picks
+            </h2>
+            {currentPickRows.length === 0 ? (
+              <EmptyState
+                title="No surviving players"
+                description="There is nobody left to make a pick this gameweek."
+              />
+            ) : (
+              <>
+                <TableWrap>
+                  <Table>
+                    <Thead>
+                      <Tr>
+                        <Th>Player</Th>
+                        <Th>Pick</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {currentPickRows.map((row) => (
+                        <Tr key={row.memberId}>
+                          <Td>
+                            <span className="font-medium">{row.playerName}</span>
+                          </Td>
+                          <Td>
+                            {row.teamName ? (
+                              <span className="font-display font-bold uppercase">
+                                {row.teamName}
+                              </span>
+                            ) : (
+                              <Badge tone="pending">No pick yet</Badge>
+                            )}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableWrap>
+                {openGameweek.status === GameweekStatus.OPEN ? (
+                  <p className="text-ink-faint mt-3 text-xs">
+                    Players can still change their pick until the deadline.
+                  </p>
+                ) : null}
+              </>
+            )}
+          </section>
+        ) : null}
 
         {/* Gameweeks */}
         <section>
