@@ -111,7 +111,7 @@ export function SettleGameweekForm({
                 ) : null}
               </div>
 
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <OutcomeOption
                   fixtureId={fixture.id}
                   label="Home win"
@@ -172,7 +172,7 @@ export function SettleGameweekForm({
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
       {state.success ? <Alert tone="success">{state.success}</Alert> : null}
 
-      <div className="border-line flex items-center justify-between gap-4 border-t pt-5">
+      <div className="border-line flex flex-wrap items-center justify-between gap-4 border-t pt-5">
         <p className="text-ink-muted text-sm">
           Settling gameweek {weekNumber} eliminates every player whose team did
           not win. This cannot be undone.

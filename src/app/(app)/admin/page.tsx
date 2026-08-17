@@ -65,8 +65,10 @@ export default async function AdminPage() {
         </div>
       ) : null}
 
+      {/* min-w-0 lets each column shrink below its content's intrinsic width,
+          so wide tables scroll inside TableWrap instead of stretching the page. */}
       <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
-        <section>
+        <section className="min-w-0">
           <h2 className="display-3 rule-crimson mb-5">Leagues</h2>
 
           {leagues.length === 0 ? (
@@ -156,7 +158,7 @@ export default async function AdminPage() {
           )}
         </section>
 
-        <aside>
+        <aside className="min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>New league</CardTitle>

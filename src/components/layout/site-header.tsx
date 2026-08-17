@@ -10,7 +10,7 @@ export async function SiteHeader() {
 
   return (
     <header className="border-line bg-surface-sunken/95 sticky top-0 z-40 border-b backdrop-blur">
-      <div className="shell flex h-16 items-center justify-between gap-4">
+      <div className="shell flex h-16 items-center justify-between gap-2 sm:gap-4">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <span className="bg-crimson font-display flex size-8 items-center justify-center rounded-[8px] text-sm font-black text-white">
             LMS
@@ -69,7 +69,7 @@ function NavLink({
     <Link
       href={href}
       className={cn(
-        "font-display text-ink-muted hover:bg-surface-raised hover:text-ink inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-xs font-bold tracking-[0.06em] uppercase transition-colors",
+        "font-display text-ink-muted hover:bg-surface-raised hover:text-ink inline-flex items-center gap-1.5 rounded-[8px] px-2 py-2 text-xs font-bold tracking-[0.06em] uppercase transition-colors sm:px-3",
         className,
       )}
     >

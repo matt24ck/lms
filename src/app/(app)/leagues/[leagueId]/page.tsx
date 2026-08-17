@@ -176,8 +176,10 @@ export default async function LeaguePage({
         />
       </div>
 
+      {/* min-w-0 lets each column shrink below its content's intrinsic width,
+          so wide tables scroll inside TableWrap instead of stretching the page. */}
       <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           {/* Players */}
           <section>
             <h2 className="display-3 rule-crimson mb-5">Players</h2>
@@ -359,7 +361,7 @@ export default async function LeaguePage({
         </div>
 
         {/* Fixtures */}
-        <aside>
+        <aside className="min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>

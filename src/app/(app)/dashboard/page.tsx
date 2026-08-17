@@ -79,8 +79,10 @@ export default async function DashboardPage() {
         description="Pick a league to see this week's fixtures, make your selection and check who is still standing."
       />
 
+      {/* min-w-0 lets each column shrink below its content's intrinsic width,
+          keeping long league names and codes from stretching the page. */}
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           {memberships.length === 0 ? (
             <EmptyState
               title="You're not in a league yet"
@@ -192,7 +194,7 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        <aside>
+        <aside className="min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>Join a league</CardTitle>
