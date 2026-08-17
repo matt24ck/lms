@@ -86,6 +86,15 @@ export default async function SettleGameweekPage({
     (member) => !relevantPicks.some((pick) => pick.memberId === member.id),
   );
 
+  const pickByMemberId = new Map(relevantPicks.map((pick) => [pick.memberId, pick]));
+  const pickRows = aliveMembers
+    .map((member) => ({
+      memberId: member.id,
+      playerName: member.user.name ?? "Player",
+      pick: pickByMemberId.get(member.id) ?? null,
+    }))
+    .sort((a, b) => a.playerName.localeCompare(b.playerName));
+
   const isSettled = gameweek.status === GameweekStatus.SETTLED;
 
   return (
@@ -216,6 +225,47 @@ export default async function SettleGameweekPage({
               />
             </CardContent>
           </Card>
+
+          {pickRows.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Current picks</CardTitle>
+                <CardDescription>
+                  {gameweek.status === GameweekStatus.OPEN
+                    ? "Who each surviving player has picked so far. Players can still change their pick until the deadline."
+                    : "Who each surviving player picked this gameweek."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <TableWrap className="rounded-none border-0">
+                  <Table>
+                    <Thead>
+                      <Tr>
+                        <Th>Player</Th>
+                        <Th>Pick</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {pickRows.map((row) => (
+                        <Tr key={row.memberId}>
+                          <Td>{row.playerName}</Td>
+                          <Td>
+                            {row.pick ? (
+                              <span className="font-display font-bold uppercase">
+                                {row.pick.teamName}
+                              </span>
+                            ) : (
+                              <Badge tone="pending">No pick yet</Badge>
+                            )}
+                          </Td>
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableWrap>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       )}
     </>
