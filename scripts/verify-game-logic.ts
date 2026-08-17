@@ -276,6 +276,31 @@ async function main() {
     (await prisma.league.findUniqueOrThrow({ where: { id: voidLeague.id } })).status === "OPEN",
   );
 
+  // Relaunching a matchday snapshots the same football-data match ids into a
+  // new gameweek — that must not collide (regression: externalId was globally
+  // unique, so launching a matchday twice blew up with P2002).
+  const vgw2 = await makeGameweek(voidLeague.id, 2);
+  const reused = await prisma.fixture.findFirstOrThrow({
+    where: { gameweekId: vgw1.id },
+  });
+  const duplicateAllowed = await prisma.fixture
+    .create({
+      data: {
+        gameweekId: vgw2.id,
+        externalId: reused.externalId,
+        homeTeamId: reused.homeTeamId,
+        homeTeamName: reused.homeTeamName,
+        homeTeamTla: reused.homeTeamTla,
+        awayTeamId: reused.awayTeamId,
+        awayTeamName: reused.awayTeamName,
+        awayTeamTla: reused.awayTeamTla,
+        kickoff: reused.kickoff,
+      },
+    })
+    .then(() => true)
+    .catch(() => false);
+  check("a match id can appear in two gameweeks' fixtures", duplicateAllowed);
+
   // ── Scenario 4: deadline lock ────────────────────────────────────
   console.log("\nScenario 4 — the deadline closes picks");
 

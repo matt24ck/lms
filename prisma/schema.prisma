@@ -206,8 +206,10 @@ enum GameweekStatus {
 model Fixture {
   id         String @id @default(cuid())
   gameweekId String
-  /// football-data.org match id.
-  externalId Int    @unique
+  /// football-data.org match id. Unique per gameweek, not globally — the same
+  /// real match is snapshotted into every gameweek that uses its matchday
+  /// (several leagues, or a relaunch after a voided week).
+  externalId Int
 
   homeTeamId   Int
   homeTeamName String
@@ -223,6 +225,7 @@ model Fixture {
 
   gameweek Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
 
+  @@unique([gameweekId, externalId])
   @@index([gameweekId])
   @@map("fixtures")
 }
